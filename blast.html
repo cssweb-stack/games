@@ -1,0 +1,274 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blast!</title>
+<style>
+* { box-sizing: border-box; }
+body {
+margin: 0;
+background: #202633;
+color: white;
+font-family: Arial, sans-serif;
+text-align: center;
+}
+h1 { margin: 25px 0 8px; }
+p { color: #c5cad4; }
+canvas {
+display: block;
+width: min(95%, 900px);
+height: auto;
+margin: 20px auto;
+border: 3px solid white;
+border-radius: 10px;
+background: #dff4ff;
+}
+</style>
+</head>
+<body>
+<h1>Blast!</h1>
+<p>Move: ← → &nbsp; Shoot: Space &nbsp; Restart: R</p>
+<canvas id="game" width="900" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const ground = 390;
+const keys = {};
+const worldEnd = 2600;
+
+const ball = {
+x: 80,
+y: ground - 18,
+radius: 18,
+speed: 5,
+direction: 1
+};
+
+let obstacles = [];
+let bullets = [];
+let particles = [];
+let camera = 0;
+let score = 0;
+let gameOver = false;
+let won = false;
+let lastShot = 0;
+
+function reset() {
+ball.x = 80;
+ball.direction = 1;
+obstacles = [
+{x: 350, w: 45, h: 35, hp: 1},
+{x: 600, w: 55, h: 55, hp: 1},
+{x: 900, w: 40, h: 75, hp: 2},
+{x: 1200, w: 65, h: 45, hp: 1},
+{x: 1500, w: 45, h: 85, hp: 2},
+{x: 1800, w: 70, h: 60, hp: 2},
+{x: 2150, w: 60, h: 95, hp: 3}
+];
+bullets = [];
+particles = [];
+camera = 0;
+score = 0;
+lastShot = 0;
+gameOver = false;
+won = false;
+}
+
+document.addEventListener("keydown", e => {
+if (["ArrowLeft", "ArrowRight", "Space"].includes(e.code)) {
+e.preventDefault();
+}
+keys[e.code] = true;
+if (e.code === "KeyR") reset();
+});
+
+document.addEventListener("keyup", e => {
+keys[e.code] = false;
+});
+
+window.addEventListener("blur", () => {
+for (const key in keys) keys[key] = false;
+});
+
+function shoot(now) {
+if (now - lastShot < 180) return;
+lastShot = now;
+bullets.push({
+x: ball.x + ball.direction * 25,
+y: ball.y,
+vx: ball.direction * 12,
+radius: 5
+});
+}
+
+function explode(x, y) {
+for (let i = 0; i < 24; i++) {
+const angle = Math.random() * Math.PI * 2;
+const speed = 2 + Math.random() * 6;
+particles.push({
+x: x,
+y: y,
+vx: Math.cos(angle) * speed,
+vy: Math.sin(angle) * speed,
+life: 30 + Math.random() * 20,
+color: Math.random() > 0.5 ? "#ff9800" : "#ffeb3b"
+});
+}
+}
+
+function update(now) {
+if (!gameOver && !won) {
+if (keys["ArrowRight"]) {
+ball.x += ball.speed;
+ball.direction = 1;
+}
+if (keys["ArrowLeft"]) {
+ball.x -= ball.speed;
+ball.direction = -1;
+}
+
+ball.x = Math.max(ball.radius, Math.min(worldEnd, ball.x));
+
+if (keys["Space"]) shoot(now);
+
+for (let i = bullets.length - 1; i >= 0; i--) {
+const b = bullets[i];
+b.x += b.vx;
+
+if (b.x < 0 || b.x > worldEnd + 100) {
+bullets.splice(i, 1);
+continue;
+}
+
+let hit = false;
+for (let j = obstacles.length - 1; j >= 0; j--) {
+const o = obstacles[j];
+if (b.x + b.radius > o.x &&
+b.x - b.radius < o.x + o.w &&
+b.y + b.radius > ground - o.h &&
+b.y - b.radius < ground) {
+o.hp--;
+hit = true;
+explode(b.x, b.y);
+
+if (o.hp <= 0) {
+explode(o.x + o.w / 2, ground - o.h / 2);
+obstacles.splice(j, 1);
+score += 100;
+}
+break;
+}
+}
+if (hit) bullets.splice(i, 1);
+}
+
+for (const o of obstacles) {
+const closestX = Math.max(o.x, Math.min(ball.x, o.x + o.w));
+const closestY = Math.max(ground - o.h, Math.min(ball.y, ground));
+const dx = ball.x - closestX;
+const dy = ball.y - closestY;
+if (dx * dx + dy * dy < ball.radius * ball.radius) {
+gameOver = true;
+}
+}
+
+if (ball.x >= worldEnd - 30) won = true;
+camera = Math.max(0, Math.min(worldEnd - canvas.width, ball.x - 220));
+}
+
+for (let i = particles.length - 1; i >= 0; i--) {
+const p = particles[i];
+p.x += p.vx;
+p.y += p.vy;
+p.vy += 0.12;
+p.life--;
+if (p.life <= 0) particles.splice(i, 1);
+}
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+// Sky
+ctx.fillStyle = "#dff4ff";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// Ground
+ctx.fillStyle = "#68b86b";
+ctx.fillRect(0, ground, canvas.width, canvas.height - ground);
+
+// Obstacles
+for (const o of obstacles) {
+ctx.fillStyle = o.hp > 1 ? "#555" : "#333";
+ctx.fillRect(o.x - camera, ground - o.h, o.w, o.h);
+}
+
+// Bullets
+ctx.fillStyle = "#ff5722";
+for (const b of bullets) {
+ctx.beginPath();
+ctx.arc(b.x - camera, b.y, b.radius, 0, Math.PI * 2);
+ctx.fill();
+}
+
+// Explosions
+for (const p of particles) {
+ctx.globalAlpha = Math.min(1, p.life / 20);
+ctx.fillStyle = p.color;
+ctx.beginPath();
+ctx.arc(p.x - camera, p.y, 4, 0, Math.PI * 2);
+ctx.fill();
+}
+ctx.globalAlpha = 1;
+
+// Red ball
+ctx.beginPath();
+ctx.arc(ball.x - camera, ball.y, ball.radius, 0, Math.PI * 2);
+ctx.fillStyle = "#e53935";
+ctx.fill();
+
+// Gun barrel
+ctx.fillStyle = "#444";
+const gunX = ball.x - camera;
+if (ball.direction === 1) {
+ctx.fillRect(gunX + 12, ball.y - 5, 22, 10);
+} else {
+ctx.fillRect(gunX - 34, ball.y - 5, 22, 10);
+}
+
+// Score
+ctx.fillStyle = "#222";
+ctx.font = "bold 20px Arial";
+ctx.fillText("Score: " + score, 20, 35);
+ctx.fillText("Distance: " + Math.floor(ball.x), 20, 65);
+
+// End screen
+if (gameOver || won) {
+ctx.fillStyle = "rgba(0,0,0,0.7)";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.fillStyle = "white";
+ctx.textAlign = "center";
+ctx.font = "bold 42px Arial";
+ctx.fillText(won ? "YOU WIN!" : "GAME OVER", 450, 200);
+ctx.font = "22px Arial";
+ctx.fillText("Final Score: " + score, 450, 245);
+ctx.fillText("Press R to restart", 450, 285);
+ctx.textAlign = "left";
+}
+}
+
+function loop(now) {
+update(now);
+draw();
+requestAnimationFrame(loop);
+}
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
