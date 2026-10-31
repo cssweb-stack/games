@@ -1,0 +1,177 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jump It Up!</title>
+<style>
+* { box-sizing: border-box; }
+body {
+margin: 0;
+background: #202633;
+color: white;
+font-family: Arial, sans-serif;
+text-align: center;
+}
+h1 { margin: 25px 0 8px; }
+p { color: #c5cad4; }
+canvas {
+display: block;
+width: min(95%, 900px);
+height: auto;
+margin: 20px auto;
+border: 3px solid white;
+border-radius: 10px;
+background: #dff4ff;
+}
+</style>
+</head>
+<body>
+<h1>Jump It Up!</h1>
+<p>Move: ← → &nbsp; Jump: Space or ↑ &nbsp; Restart: R</p>
+<canvas id="game" width="900" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const ground = 390;
+const keys = {};
+const ball = {
+x: 80,
+y: ground - 18,
+radius: 18,
+vx: 0,
+vy: 0,
+speed: 5,
+jump: -13,
+onGround: true
+};
+
+const obstacles = [
+{x: 300, w: 45, h: 35},
+{x: 500, w: 55, h: 55},
+{x: 750, w: 40, h: 75},
+{x: 1050, w: 65, h: 45},
+{x: 1350, w: 45, h: 85},
+{x: 1650, w: 70, h: 60}
+];
+
+let camera = 0;
+let gameOver = false;
+let won = false;
+
+function reset() {
+ball.x = 80;
+ball.y = ground - ball.radius;
+ball.vx = 0;
+ball.vy = 0;
+ball.onGround = true;
+camera = 0;
+gameOver = false;
+won = false;
+}
+
+document.addEventListener("keydown", e => {
+if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space"].includes(e.code)) {
+e.preventDefault();
+}
+keys[e.code] = true;
+if (e.code === "KeyR") reset();
+
+if ((e.code === "Space" || e.code === "ArrowUp") &&
+!e.repeat && ball.onGround && !gameOver && !won) {
+ball.vy = ball.jump;
+ball.onGround = false;
+}
+});
+
+document.addEventListener("keyup", e => {
+keys[e.code] = false;
+});
+
+window.addEventListener("blur", () => {
+for (const key in keys) keys[key] = false;
+});
+
+function update() {
+if (gameOver || won) return;
+
+ball.vx = 0;
+if (keys["ArrowRight"]) ball.vx = ball.speed;
+if (keys["ArrowLeft"]) ball.vx = -ball.speed;
+
+ball.x = Math.max(ball.radius, ball.x + ball.vx);
+ball.vy += 0.6;
+ball.y += ball.vy;
+
+if (ball.y + ball.radius >= ground) {
+ball.y = ground - ball.radius;
+ball.vy = 0;
+ball.onGround = true;
+}
+
+for (const o of obstacles) {
+const closestX = Math.max(o.x, Math.min(ball.x, o.x + o.w));
+const closestY = Math.max(ground - o.h, Math.min(ball.y, ground));
+const dx = ball.x - closestX;
+const dy = ball.y - closestY;
+
+if (dx * dx + dy * dy < ball.radius * ball.radius) {
+gameOver = true;
+}
+}
+
+if (ball.x > 1850) won = true;
+camera = Math.max(0, ball.x - 220);
+}
+
+function draw() {
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+ctx.fillStyle = "#dff4ff";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+ctx.fillStyle = "#68b86b";
+ctx.fillRect(0, ground, canvas.width, canvas.height - ground);
+
+ctx.fillStyle = "#333";
+for (const o of obstacles) {
+ctx.fillRect(o.x - camera, ground - o.h, o.w, o.h);
+}
+
+ctx.beginPath();
+ctx.arc(ball.x - camera, ball.y, ball.radius, 0, Math.PI * 2);
+ctx.fillStyle = "#e53935";
+ctx.fill();
+ctx.closePath();
+
+ctx.fillStyle = "#222";
+ctx.font = "20px Arial";
+ctx.fillText("Distance: " + Math.floor(ball.x), 20, 35);
+
+if (gameOver || won) {
+ctx.fillStyle = "rgba(0,0,0,0.7)";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+ctx.fillStyle = "white";
+ctx.textAlign = "center";
+ctx.font = "bold 42px Arial";
+ctx.fillText(won ? "YOU WIN!" : "GAME OVER", 450, 200);
+ctx.font = "22px Arial";
+ctx.fillText("Press R to restart", 450, 250);
+ctx.textAlign = "left";
+}
+}
+
+function loop() {
+update();
+draw();
+requestAnimationFrame(loop);
+}
+
+reset();
+loop();
+</script>
+</body>
+</html>
